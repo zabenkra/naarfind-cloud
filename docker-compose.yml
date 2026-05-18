@@ -1,0 +1,81 @@
+# =============================================================================
+# LOCAL DEVELOPMENT ONLY
+# Do not use this file for production.
+#
+# Production stack:
+#   Backend  → Render Web Service (backend/Dockerfile + start.sh)
+#   Database → Render PostgreSQL (DATABASE_URL env var)
+#   Frontend → Vercel (VITE_API_URL, VITE_WS_URL)
+#   Storage  → Cloudflare R2
+# =============================================================================
+
+services:
+
+  db:
+    image: postgres:16
+    container_name: naarfind_db
+    environment:
+      POSTGRES_USER: naarfind
+      POSTGRES_PASSWORD: naarfind123
+      POSTGRES_DB: naarfind
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U naarfind -d naarfind"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: naarfind_backend
+    ports:
+      - "${PORT:-8000}:8000"
+    volumes:
+      - ./backend:/app
+    env_file:
+      - .env
+    environment:
+      ENVIRONMENT: development
+      PORT: 8000
+      DATABASE_URL: ${DATABASE_URL:-postgresql://naarfind:naarfind123@db:5432/naarfind}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: naarfind_frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8000/ws/events}
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  edge-agent:
+    build: ./edge-agent
+    container_name: naarfind_edge_agent
+    env_file:
+      - .env
+    volumes:
+      - ./edge-agent:/app
+    working_dir: /app
+    profiles:
+      - edge
+    command: ["python", "test_r2_upload.py"]
+
+volumes:
+  postgres_data:

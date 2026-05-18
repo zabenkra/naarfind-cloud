@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #f97316;
+  --color-brand-dim: #ea580c;
+  --color-surface: #0b1220;
+  --color-panel: #111827;
+  --color-panel-elevated: #1a2332;
+  --color-border: #1e293b;
+  --color-muted: #94a3b8;
+  --color-danger: #ef4444;
+  --color-success: #10b981;
+  --color-info: #06b6d4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  background: var(--color-surface);
+  color: #f8fafc;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes event-highlight {
+  0%,
+  100% {
+    background-color: rgba(15, 23, 42, 0.6);
+  }
+  50% {
+    background-color: rgba(249, 115, 22, 0.2);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.35s ease-out;
+}
+
+.animate-event-highlight {
+  animation: event-highlight 1.2s ease-in-out 2;
+}

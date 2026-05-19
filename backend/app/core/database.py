@@ -1,7 +1,13 @@
+import logging
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-from app.core.config import DATABASE_URL
+from app.core.config import DATABASE_HOST, DATABASE_URL
+
+logger = logging.getLogger(__name__)
+
+logger.info("SQLAlchemy engine connecting to host: %s", DATABASE_HOST)
 
 engine = create_engine(
     DATABASE_URL,

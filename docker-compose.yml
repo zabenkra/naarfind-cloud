@@ -43,7 +43,8 @@ services:
     environment:
       ENVIRONMENT: development
       PORT: 8000
-      DATABASE_URL: ${DATABASE_URL:-postgresql://naarfind:naarfind123@db:5432/naarfind}
+      # Local Postgres only — overrides any DATABASE_URL from .env (e.g. Supabase)
+      DATABASE_URL: postgresql://naarfind:naarfind123@db:5432/naarfind
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
     depends_on:
       db:

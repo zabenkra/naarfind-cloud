@@ -1,15 +1,25 @@
+import logging
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 # backend/app/core/config.py -> parents[2] = backend root (/app in Docker)
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 _PROJECT_ROOT = _BACKEND_ROOT.parent
 
-for _env_file in (_PROJECT_ROOT / ".env", _BACKEND_ROOT / ".env"):
-    if _env_file.is_file():
-        load_dotenv(_env_file, override=False)
+# Do not load .env files on Railway/production — use platform env vars only.
+_SKIP_DOTENV = bool(os.getenv("RAILWAY_ENVIRONMENT")) or os.getenv(
+    "ENVIRONMENT", ""
+).strip().lower() == "production"
+
+if not _SKIP_DOTENV:
+    for _env_file in (_PROJECT_ROOT / ".env", _BACKEND_ROOT / ".env"):
+        if _env_file.is_file():
+            load_dotenv(_env_file, override=False)
 
 ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development").strip().lower()
 IS_PRODUCTION: bool = ENVIRONMENT == "production"
@@ -28,16 +38,34 @@ def normalize_database_url(url: str) -> str:
     return url
 
 
-def _database_url() -> str:
-    url = os.getenv("DATABASE_URL", "").strip()
-    if url:
-        return normalize_database_url(url)
-    if IS_PRODUCTION:
-        raise RuntimeError("DATABASE_URL is required in production")
-    return "postgresql://naarfind:naarfind123@db:5432/naarfind"
+def database_host_from_url(url: str) -> str:
+    """Return hostname for logging only (never log credentials)."""
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname or ""
+        port = parsed.port
+        if host and port:
+            return f"{host}:{port}"
+        return host or "unknown"
+    except Exception:
+        return "unknown"
 
 
-DATABASE_URL: str = _database_url()
+def require_database_url() -> str:
+    """DATABASE_URL must be set in the process environment (no code defaults)."""
+    raw = os.getenv("DATABASE_URL")
+    if raw is None or not str(raw).strip():
+        raise RuntimeError(
+            "DATABASE_URL is not set. "
+            "Set it in Railway/Render dashboard or in docker-compose.yml for local development."
+        )
+    return normalize_database_url(str(raw).strip())
+
+
+DATABASE_URL: str = require_database_url()
+DATABASE_HOST: str = database_host_from_url(DATABASE_URL)
+
+logger.info("Database host: %s", DATABASE_HOST)
 
 # --- JWT (single source of truth for all encode/decode) ---
 JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "change-me-in-development").strip()

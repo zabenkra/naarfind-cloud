@@ -1,0 +1,23 @@
+[Unit]
+Description=NaarFind Edge Agent (heartbeat + fire detection)
+Documentation=file:///home/pi/naarfind-cloud/edge-agent/README_SYSTEMD.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/naarfind-cloud/edge-agent
+EnvironmentFile=/home/pi/naarfind-cloud/edge-agent/.env
+ExecStart=/home/pi/naarfind-cloud/edge-agent/venv/bin/python /home/pi/naarfind-cloud/edge-agent/agent.py --run
+Restart=always
+RestartSec=5
+
+# Logs: journalctl -u naarfind-agent -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=naarfind-agent
+
+[Install]
+WantedBy=multi-user.target

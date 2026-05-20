@@ -39,7 +39,8 @@ class FireDetectorLoop:
     ) -> None:
         self.cfg = cfg or config
         self.on_alert = on_alert
-        self.debug_window = debug_window or self.cfg.enable_debug_window
+        # GUI only when caller explicitly enables it (e.g. --detect-debug + ENABLE_DEBUG_WINDOW)
+        self.debug_window = debug_window
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._last_alert_time = 0.0
@@ -91,7 +92,7 @@ class FireDetectorLoop:
                 self.cfg.camera_height,
                 self.cfg.camera_fps,
             )
-            logger.info("Camera ready backend=%s", camera.backend)
+            logger.info("camera initialized backend=%s", camera.backend)
 
             while not self._stop.is_set():
                 frame = camera.read()

@@ -1,8 +1,28 @@
 # NaarFind Edge Agent — systemd (Raspberry Pi)
 
-Run `python agent.py --run` automatically on boot with automatic restarts and journal logs.
-
 **Install path:** `/home/pi/naarfind-cloud/edge-agent`
+
+---
+
+## 0. Sync code (required for detection CLI)
+
+If you see:
+```
+agent.py: error: one of the arguments --test --heartbeat-test --run --r2-test is required
+```
+
+Your `agent.py` is outdated. Fix:
+
+```bash
+cd /home/pi/naarfind-cloud
+git pull
+cd edge-agent
+bash scripts/verify_cli.sh
+python agent.py --version
+# Must show: NaarFind edge-agent 2.1.0
+python agent.py --help
+# Must list: --camera-test --detect --detect-debug
+```
 
 ---
 
@@ -12,131 +32,83 @@ Run `python agent.py --run` automatically on boot with automatic restarts and jo
 cd /home/pi/naarfind-cloud/edge-agent
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-pi.txt
 cp .env.example .env
 ```
 
-Edit `.env` with production values:
+Edit `.env`:
 
 ```env
-CLOUD_API_URL=https://your-api.example.com
+CLOUD_API_URL=https://your-api.up.railway.app
 DEVICE_UID=pi-001
 DEVICE_API_KEY=your-secret-key
 AGENT_VERSION=1.0.0
+MODEL_PATH=./models/fire_smoke_yolov8n_ncnn_model
+ENABLE_DEBUG_WINDOW=false
 ```
 
-Use simple `KEY=value` lines (no `export`). systemd reads this file via `EnvironmentFile=`.
+---
 
-**Verify API and hardware before installing systemd:**
+## 2. Test before systemd
 
 ```bash
 source venv/bin/activate
+
+# API
 python agent.py --heartbeat-test
+
+# Camera → snapshots/camera_test.jpg
 python agent.py --camera-test
-python agent.py --detect-debug   # optional; needs model in models/
+
+# Detection (needs model in models/)
+python agent.py --detect-debug
+
+# Full production (manual)
+python agent.py --run
 ```
-
-**CLI reference:**
-
-| Command | Purpose |
-|---------|---------|
-| `python agent.py --camera-test` | Save `snapshots/camera_test.jpg` |
-| `python agent.py --detect` | Detection + heartbeat (headless) |
-| `python agent.py --detect-debug` | Verbose logs; GUI if `ENABLE_DEBUG_WINDOW=true` |
-| `python agent.py --run` | Production (used by systemd) |
-| `python agent.py --heartbeat-test` | One-shot API check |
-
-If `--detect-debug` says `one of the arguments ... is required`, pull latest code — your `agent.py` is outdated.
 
 ---
 
-## 2. Install the service
+## 3. Install service
 
 ```bash
-cd /home/pi/naarfind-cloud/edge-agent
 sudo bash scripts/install_service.sh
-```
-
-This copies `systemd/naarfind-agent.service` to `/etc/systemd/system/`, enables it on boot, and starts it now.
-
----
-
-## 3. Check status
-
-```bash
 sudo systemctl status naarfind-agent
 ```
 
-Expected: `Active: active (running)`.
+Runs: `python agent.py --run` (heartbeat + detection; heartbeat only if no model).
 
 ---
 
-## 4. View logs (live)
+## 4. Logs
 
 ```bash
 journalctl -u naarfind-agent -f
 ```
 
-Recent logs without follow:
-
-```bash
-journalctl -u naarfind-agent -n 100 --no-pager
-```
-
-Since last boot:
-
-```bash
-journalctl -u naarfind-agent -b
-```
+Look for:
+- `camera initialized`
+- `model loaded` or `model missing`
+- `Heartbeat OK`
+- `processed_fps=... infer=...ms`
+- `ALERT` / `Alert sent`
 
 ---
 
-## 5. Service controls
+## 5. Commands reference
 
-```bash
-sudo systemctl restart naarfind-agent
-sudo systemctl stop naarfind-agent
-sudo systemctl start naarfind-agent
-```
+| Command | Use |
+|---------|-----|
+| `python agent.py --camera-test` | Verify CSI camera |
+| `python agent.py --detect-debug` | Test AI + logs before production |
+| `python agent.py --detect` | Headless detection test |
+| `python agent.py --run` | Production (same as systemd) |
+| `python agent.py --heartbeat-test` | Cloud API check |
 
 ---
 
 ## 6. Uninstall
 
 ```bash
-cd /home/pi/naarfind-cloud/edge-agent
 sudo bash scripts/uninstall_service.sh
 ```
-
-Stops and disables the service and removes `/etc/systemd/system/naarfind-agent.service`. Your code, `venv`, and `.env` stay on disk.
-
----
-
-## Service details
-
-| Setting | Value |
-|---------|--------|
-| Unit file | `systemd/naarfind-agent.service` |
-| After | `network-online.target` |
-| Command | `venv/bin/python agent.py --run` (heartbeat + detection) |
-| Env | `/home/pi/naarfind-cloud/edge-agent/.env` |
-| Restart | `always` (5s delay) |
-| User | `pi` |
-
----
-
-## Troubleshooting
-
-| Issue | Fix |
-|-------|-----|
-| `venv/bin/python: No such file` | Run `python3 -m venv venv` in `edge-agent` |
-| Heartbeat 401 | `DEVICE_API_KEY` in `.env` must match database |
-| Service exits immediately | `journalctl -u naarfind-agent -n 50` |
-| `.env` ignored | No spaces around `=`; restart after edits: `sudo systemctl restart naarfind-agent` |
-| Wrong API URL | Set `CLOUD_API_URL` in `.env`, then restart |
-
----
-
-## Different install path
-
-If the repo is not under `/home/pi/naarfind-cloud/edge-agent`, edit paths in `systemd/naarfind-agent.service` before running `install_service.sh`.

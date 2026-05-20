@@ -1,7 +1,6 @@
 import argparse
 import logging
 import os
-import sys
 import threading
 import time
 from pathlib import Path
@@ -36,17 +35,8 @@ API_HEADERS = {
 _heartbeat_stop = threading.Event()
 _detector_loop = None
 
-CLI_MODES = [
-    "--test",
-    "--heartbeat-test",
-    "--camera-test",
-    "--detect",
-    "--detect-debug",
-    "--run",
-    "--r2-test",
-    "--ai-test",
-    "--run-ai",
-]
+# Bump when CLI changes — verify on Pi: python agent.py --version
+CLI_VERSION = "2.1.0"
 
 
 def _request_with_retries(method: str, url: str, **kwargs) -> requests.Response:
@@ -374,7 +364,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="NaarFind Raspberry Pi Edge Agent",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "Modes (pick one):\n"
+            "Modes (pick exactly one):\n"
             "  --camera-test     Capture one frame → snapshots/camera_test.jpg\n"
             "  --detect          Fire/smoke detection + heartbeat (no GUI)\n"
             "  --detect-debug    Detection + verbose logs; GUI if ENABLE_DEBUG_WINDOW=true\n"
@@ -382,7 +372,14 @@ def build_parser() -> argparse.ArgumentParser:
             "  --heartbeat-test  Send one heartbeat\n"
             "  --test            Send one test fire event\n"
             "  --r2-test         Test Cloudflare R2 upload\n"
+            "\n"
+            "If you only see --test --heartbeat-test --run --r2-test, run: git pull\n"
         ),
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"NaarFind edge-agent {CLI_VERSION}",
     )
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--test", action="store_true", help="Send one test fire event")

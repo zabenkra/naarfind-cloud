@@ -55,9 +55,10 @@ class YOLOFireSmokeInference:
     def load_model(self) -> bool:
         resolved = self._resolve_model_file()
         if not resolved:
+            logger.warning("model missing")
             logger.warning(
-                "No YOLO model found. Checked:\n  %s\n  %s\n"
-                "Detection disabled — heartbeat will continue.",
+                "No YOLO model at MODEL_PATH=%s or MODEL_FALLBACK_PATH=%s — "
+                "detection disabled, heartbeat will continue",
                 self.model_path,
                 self.fallback_path,
             )
@@ -73,7 +74,8 @@ class YOLOFireSmokeInference:
             self._class_names = {int(k): str(v).lower() for k, v in names.items()}
             if not self._class_names:
                 self._class_names = {0: "fire", 1: "smoke"}
-            logger.info("Model loaded. Classes: %s", self._class_names)
+            logger.info("model loaded from %s", resolved)
+            logger.info("Model classes: %s", self._class_names)
             return True
         except Exception as exc:
             logger.error("Failed to load YOLO model: %s", exc)

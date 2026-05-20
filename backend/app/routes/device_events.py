@@ -10,11 +10,19 @@ from app.schemas.device_heartbeat import HeartbeatPayload
 from app.schemas.fire_event_status import FireEventStatus
 from app.services.broadcast import broadcast_device_heartbeat, broadcast_fire_event
 from app.services.device_auth import get_device_by_api_key
-from app.services.device_status import connection_status
 
 router = APIRouter(prefix="/api/device", tags=["Device Events"])
 
 # TODO(production): rate-limit device ingest (e.g. slowapi — 60/min per device API key)
+
+
+@router.get("/heartbeat", include_in_schema=False)
+def device_heartbeat_get():
+    """Reject mistaken GET requests from agents or health checks."""
+    raise HTTPException(
+        status_code=405,
+        detail="Method not allowed. Use POST /api/device/heartbeat with JSON body and X-API-KEY header.",
+    )
 
 
 @router.post(
@@ -24,13 +32,13 @@ router = APIRouter(prefix="/api/device", tags=["Device Events"])
 )
 async def device_heartbeat(
     payload: HeartbeatPayload,
-    x_api_key: str = Header(..., alias="X-Api-Key"),
+    x_api_key: str = Header(..., alias="X-API-KEY"),
     db: Session = Depends(get_db),
 ):
     """
     Raspberry Pi edge-agent heartbeat.
 
-    Header: `X-Api-Key` (case-insensitive, e.g. `X-API-KEY`).
+    Header: `X-API-KEY` (case-insensitive).
     """
     device = get_device_by_api_key(db, payload.device_uid, x_api_key)
     now = datetime.now(timezone.utc)
@@ -46,21 +54,19 @@ async def device_heartbeat(
     db.commit()
     db.refresh(device)
 
-    status = connection_status(device.last_seen)
-
     await broadcast_device_heartbeat(device, db)
 
     return {
         "message": "Heartbeat received",
         "device_uid": device.device_uid,
-        "status": status,
+        "status": "online",
     }
 
 
 @router.post("/events/fire")
 async def create_fire_event(
     payload: FireEventCreate,
-    x_api_key: str = Header(..., alias="X-Api-Key"),
+    x_api_key: str = Header(..., alias="X-API-KEY"),
     db: Session = Depends(get_db),
 ):
     device = get_device_by_api_key(db, payload.device_uid, x_api_key)

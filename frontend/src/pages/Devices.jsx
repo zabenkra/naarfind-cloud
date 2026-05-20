@@ -1,55 +1,38 @@
 import { useEffect, useState } from 'react'
-import { Cpu } from 'lucide-react'
+import { Cpu, RefreshCw } from 'lucide-react'
 import { fetchDevices } from '../api/devices'
+import ProductionDeviceCard from '../components/devices/ProductionDeviceCard'
 import PageHeader from '../components/ui/PageHeader'
 import { getApiErrorMessage } from '../utils/apiError'
-import DataTable from '../components/ui/DataTable'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import EmptyState from '../components/ui/EmptyState'
-import StatusBadge from '../components/ui/StatusBadge'
-import { formatDate } from '../utils/format'
+
+const REFRESH_MS = 15_000
 
 export default function Devices() {
   const [devices, setDevices] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  useEffect(() => {
-    async function load() {
-      try {
-        setLoading(true)
-        setError(null)
-        setDevices(await fetchDevices())
-      } catch (err) {
-        setError(getApiErrorMessage(err, 'Failed to load devices'))
-      } finally {
-        setLoading(false)
-      }
+  const load = async () => {
+    try {
+      setError(null)
+      const data = await fetchDevices()
+      setDevices(data)
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to load devices'))
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     load()
+    const timer = setInterval(load, REFRESH_MS)
+    return () => clearInterval(timer)
   }, [])
 
-  const columns = [
-    { key: 'name', label: 'Name' },
-    { key: 'device_uid', label: 'Device UID' },
-    {
-      key: 'status',
-      label: 'Status',
-      render: (row) => (
-        <StatusBadge status={row.is_online ? 'online' : 'offline'} />
-      ),
-    },
-    {
-      key: 'last_seen',
-      label: 'Last Seen',
-      render: (row) => formatDate(row.last_seen),
-    },
-    {
-      key: 'created_at',
-      label: 'Registered',
-      render: (row) => formatDate(row.created_at),
-    },
-  ]
+  const device = devices[0]
 
   if (loading) return <LoadingSpinner label="Loading devices..." />
 
@@ -57,7 +40,17 @@ export default function Devices() {
     <div>
       <PageHeader
         title="Devices"
-        description="Monitor your fire detection sensor fleet."
+        description="Production fire detection unit — single Raspberry Pi deployment."
+        action={
+          <button
+            type="button"
+            onClick={load}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700"
+          >
+            <RefreshCw size={16} />
+            Refresh
+          </button>
+        }
       />
 
       {error && (
@@ -66,14 +59,20 @@ export default function Devices() {
         </div>
       )}
 
-      {!error && devices.length === 0 ? (
+      {!error && !device ? (
         <EmptyState
           icon={Cpu}
-          title="No devices registered"
-          description="Devices will appear here once they are added to the platform."
+          title="No production device"
+          description="Register pi-001 in the database and start the edge agent with python agent.py --run."
         />
       ) : (
-        <DataTable columns={columns} rows={devices} emptyMessage="No devices found." />
+        device && <ProductionDeviceCard device={device} />
+      )}
+
+      {!error && devices.length > 1 && (
+        <p className="mt-4 text-sm text-amber-400">
+          {devices.length} devices found — showing primary unit ({device?.device_uid}).
+        </p>
       )}
     </div>
   )

@@ -1,12 +1,32 @@
 import { getWsUrl } from './apiUrl'
 import { getToken } from './authStorage'
 
+const WS_PATH = '/ws/events'
+
 function buildWsUrl() {
   const token = getToken()
-  const base = getWsUrl()
-  if (!token) return base
+  let base = getWsUrl()
+
+  if (!base || !base.includes(WS_PATH)) {
+    console.error(
+      '[NaarFind WS] Invalid WebSocket URL (must include /ws/events). Check VITE_WS_URL.',
+      base,
+    )
+    base = base ? `${base.replace(/\/$/, '')}${WS_PATH}` : `ws://localhost:8000${WS_PATH}`
+  }
+
+  if (!token) {
+    return base
+  }
+
   const separator = base.includes('?') ? '&' : '?'
-  return `${base}${separator}token=${encodeURIComponent(token)}`
+  const url = `${base}${separator}token=${encodeURIComponent(token)}`
+
+  if (import.meta.env.DEV) {
+    console.log('[NaarFind WS] Connecting to', url.replace(/token=[^&]+/, 'token=***'))
+  }
+
+  return url
 }
 
 const RECONNECT_BASE_MS = 1000
@@ -40,8 +60,15 @@ class EventsWebSocket {
     if (this.socket?.readyState === WebSocket.OPEN) return
     if (this.socket?.readyState === WebSocket.CONNECTING) return
 
+    const url = buildWsUrl()
+    if (!url.includes(WS_PATH)) {
+      console.error('[NaarFind WS] Refusing to connect without /ws/events path:', url)
+      this.setStatus('error')
+      return
+    }
+
     this.setStatus('connecting')
-    this.socket = new WebSocket(buildWsUrl())
+    this.socket = new WebSocket(url)
 
     this.socket.onopen = () => {
       this.reconnectAttempt = 0

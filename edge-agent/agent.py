@@ -28,7 +28,7 @@ RETRY_BACKOFF_SECONDS = int(os.getenv("RETRY_BACKOFF_SECONDS", "2"))
 
 API_HEADERS = {
     "Content-Type": "application/json",
-    "X-Api-Key": DEVICE_API_KEY,
+    "X-API-KEY": DEVICE_API_KEY,
 }
 
 
@@ -58,7 +58,7 @@ def send_heartbeat() -> dict:
         "agent_version": AGENT_VERSION,
     }
     url = f"{CLOUD_API_URL}/api/device/heartbeat"
-    logging.info("Sending heartbeat to %s", url)
+    logging.info("POST %s", url)
     response = _request_with_retries("POST", url, json=payload)
     return response.json()
 

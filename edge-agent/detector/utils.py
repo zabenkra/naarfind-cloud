@@ -48,7 +48,7 @@ def save_snapshot(
     path = snapshot_dir / f"{prefix}_{timestamp}.jpg"
     annotated = draw_boxes(frame_rgb, detections)
     cv2.imwrite(str(path), annotated)
-    logger.info("Snapshot saved: %s", path)
+    logger.info("snapshot saved path=%s", path)
     return path
 
 

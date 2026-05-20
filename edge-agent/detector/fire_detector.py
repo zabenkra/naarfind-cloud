@@ -146,6 +146,33 @@ class FireDetectorLoop:
                     result["smoke_detected"],
                 )
 
+                # Same-frame fire+smoke: confirm immediately (common on Pi)
+                if (
+                    self.cfg.instant_dual_confirm
+                    and result["fire_detected"]
+                    and result["smoke_detected"]
+                    and result.get("fire_confidence", 0) >= self.cfg.fire_threshold
+                    and result.get("smoke_confidence", 0) >= self.cfg.smoke_threshold
+                ):
+                    confirmed["both_confirmed"] = True
+
+                if detections and not any(
+                    (
+                        confirmed["both_confirmed"],
+                        confirmed["fire_confirmed"],
+                        confirmed["smoke_confirmed"],
+                    )
+                ):
+                    logger.debug(
+                        "confirmation pending | fire %s/%s smoke %s/%s both %s/%s",
+                        confirmed["fire_hits"],
+                        self.cfg.fire_required,
+                        confirmed["smoke_hits"],
+                        self.cfg.smoke_required,
+                        confirmed["both_hits"],
+                        self.cfg.both_required,
+                    )
+
                 if self.debug_window:
                     self._show_debug(frame, result)
 
@@ -163,6 +190,12 @@ class FireDetectorLoop:
                 if not event_type:
                     continue
 
+                logger.warning(
+                    "detection confirmed | type=%s fire=%.2f smoke=%.2f — sending alert",
+                    event_type,
+                    result.get("fire_confidence", 0),
+                    result.get("smoke_confidence", 0),
+                )
                 self._handle_alert(frame, result, event_type)
                 temporal.reset()
 
@@ -210,8 +243,9 @@ class FireDetectorLoop:
                     self.cfg.snapshot_dir,
                     prefix=event_type,
                 )
+                logger.info("snapshot saved path=%s", local_path)
             except Exception as exc:
-                logger.error("Failed to save snapshot: %s", exc)
+                logger.error("snapshot save failed: %s", exc)
 
         payload = {
             "event_type": event_type,

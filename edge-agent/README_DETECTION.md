@@ -112,6 +112,16 @@ To use detection under systemd, the unit already runs `--run` (heartbeat + detec
 
 1. Capture frame (picamera2 or OpenCV)
 2. Every Nth frame → YOLO inference
-3. Temporal filter (fire 3/5, smoke 4/6, both 2/4)
+3. Temporal filter + **instant dual confirm** (fire+smoke same frame)
 4. Cooldown 30s between cloud alerts
-5. Snapshot with boxes → R2 → fire event API
+5. Snapshot with boxes → R2 → `POST /api/device/events/fire`
+
+Logs on alert:
+```
+detection confirmed | type=fire_smoke ...
+snapshot saved path=...
+snapshot upload started
+snapshot upload success url=...
+fire event payload: {...}
+event sent successfully event_id=...
+```

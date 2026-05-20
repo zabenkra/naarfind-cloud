@@ -8,7 +8,7 @@ from pathlib import Path
 import requests
 
 from env_loader import load_project_env
-from event_queue import dequeue_all, enqueue, save_queue
+from api_client import flush_pending_events, send_fire_event_payload
 from metrics import collect_metrics
 
 load_project_env()
@@ -40,18 +40,9 @@ CLI_VERSION = "2.1.0"
 
 
 def _request_with_retries(method: str, url: str, **kwargs) -> requests.Response:
-    last_error = None
-    for attempt in range(1, RETRY_MAX_ATTEMPTS + 1):
-        try:
-            response = requests.request(method, url, headers=API_HEADERS, timeout=30, **kwargs)
-            response.raise_for_status()
-            return response
-        except requests.RequestException as error:
-            last_error = error
-            logging.error("Attempt %s failed for %s: %s", attempt, url, error)
-            if attempt < RETRY_MAX_ATTEMPTS:
-                time.sleep(RETRY_BACKOFF_SECONDS * attempt)
-    raise RuntimeError(f"Request failed after {RETRY_MAX_ATTEMPTS} attempts") from last_error
+    from api_client import _request_with_retries as _api_request
+
+    return _api_request(method, url, **kwargs)
 
 
 def send_heartbeat() -> dict:
@@ -68,36 +59,6 @@ def send_heartbeat() -> dict:
     logging.info("POST %s", url)
     response = _request_with_retries("POST", url, json=payload)
     return response.json()
-
-
-def send_fire_event_payload(payload: dict, *, queue_on_failure: bool = True) -> dict:
-    api_payload = {
-        "device_uid": DEVICE_UID,
-        "confidence": float(payload.get("confidence", 0.0)),
-        "event_type": payload.get("event_type", "fire_detected"),
-        "image_url": payload.get("image_url"),
-        "video_url": payload.get("video_url"),
-        "temperature": payload.get("temperature"),
-    }
-
-    url = f"{CLOUD_API_URL}/api/device/events/fire"
-    logging.info(
-        "POST %s type=%s confidence=%.2f",
-        url,
-        api_payload["event_type"],
-        api_payload["confidence"],
-    )
-
-    try:
-        response = _request_with_retries("POST", url, json=api_payload)
-        logging.info("Fire event accepted: %s", response.text)
-        return response.json()
-    except RuntimeError as error:
-        if queue_on_failure:
-            enqueue(api_payload)
-            logging.error("Fire event queued for retry: %s", error)
-            return {"queued": True}
-        raise
 
 
 def send_fire_event(
@@ -119,27 +80,6 @@ def send_fire_event(
         },
         queue_on_failure=queue_on_failure,
     )
-
-
-def flush_pending_events() -> int:
-    pending = dequeue_all()
-    if not pending:
-        return 0
-
-    sent = 0
-    failed: list[dict] = []
-    for payload in pending:
-        try:
-            url = f"{CLOUD_API_URL}/api/device/events/fire"
-            _request_with_retries("POST", url, json=payload)
-            sent += 1
-            logging.info("Replayed queued fire event")
-        except RuntimeError:
-            failed.append(payload)
-
-    if failed:
-        save_queue(failed)
-    return sent
 
 
 def send_fire_event_with_media(
@@ -164,42 +104,13 @@ def send_fire_event_with_media(
     )
 
 
-def _upload_snapshot_if_configured(local_path: Path | None) -> str | None:
-    if not local_path or os.getenv("UPLOAD_SNAPSHOTS", "true").lower() not in ("1", "true", "yes"):
-        return None
-    try:
-        from storage.r2_uploader import R2Uploader
-
-        url = R2Uploader().upload_image(local_path)
-        logging.info("Snapshot uploaded to R2: %s", url)
-        return url
-    except Exception as exc:
-        logging.warning("R2 upload skipped or failed: %s", exc)
-        return None
-
-
 def handle_detection_alert(alert: dict) -> None:
-    local_path = alert.get("local_path")
-    image_url = _upload_snapshot_if_configured(
-        Path(local_path) if local_path else None
-    )
+    """Publish confirmed detection to R2 + Railway (see events.py)."""
+    from events import publish_detection_event
 
-    metrics = collect_metrics()
-    send_fire_event_payload(
-        {
-            "event_type": alert.get("event_type", "fire"),
-            "confidence": alert.get("confidence", 0.0),
-            "image_url": image_url,
-            "temperature": metrics.get("cpu_temp"),
-        }
-    )
-    logging.info(
-        "Alert sent type=%s risk=%s image=%s local=%s",
-        alert.get("event_type"),
-        alert.get("risk_level"),
-        image_url or "none",
-        local_path,
-    )
+    result = publish_detection_event(alert)
+    if not result.get("ok"):
+        logging.error("Alert pipeline failed: %s", result.get("error"))
 
 
 def _heartbeat_loop() -> None:

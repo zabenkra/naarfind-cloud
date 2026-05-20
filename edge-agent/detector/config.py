@@ -45,13 +45,15 @@ class DetectorConfig:
     upload_snapshots: bool = _env_bool("UPLOAD_SNAPSHOTS", True)
     snapshot_dir: Path = _resolve_path(os.getenv("SNAPSHOT_DIR", "./snapshots"))
 
-    # Temporal confirmation
-    fire_required: int = 3
-    fire_window: int = 5
-    smoke_required: int = 4
-    smoke_window: int = 6
-    both_required: int = 2
-    both_window: int = 4
+    # Temporal confirmation (env overrides)
+    fire_required: int = _env_int("TEMPORAL_FIRE_REQUIRED", 3)
+    fire_window: int = _env_int("TEMPORAL_FIRE_WINDOW", 5)
+    smoke_required: int = _env_int("TEMPORAL_SMOKE_REQUIRED", 4)
+    smoke_window: int = _env_int("TEMPORAL_SMOKE_WINDOW", 6)
+    both_required: int = _env_int("TEMPORAL_BOTH_REQUIRED", 2)
+    both_window: int = _env_int("TEMPORAL_BOTH_WINDOW", 4)
+    # When fire+smoke in same frame above thresholds, confirm immediately
+    instant_dual_confirm: bool = _env_bool("INSTANT_DUAL_CONFIRM", True)
 
 
 config = DetectorConfig()

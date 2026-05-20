@@ -1,7 +1,10 @@
 """Temporal confirmation to reduce single-frame false alarms."""
 
+import logging
 from collections import deque
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -29,9 +32,11 @@ class TemporalFilter:
 
     @staticmethod
     def _confirmed(hits: deque[bool], rule: TemporalRule) -> bool:
-        if len(hits) < rule.window:
+        """True if at least `required` hits in the last `window` processed frames."""
+        if len(hits) < rule.required:
             return False
-        return sum(hits) >= rule.required
+        recent = list(hits)[-rule.window :]
+        return sum(recent) >= rule.required
 
     def update(self, fire_detected: bool, smoke_detected: bool) -> dict:
         self._fire_hits.append(fire_detected)
@@ -50,6 +55,12 @@ class TemporalFilter:
             "fire_confirmed": fire_confirmed,
             "smoke_confirmed": smoke_confirmed,
             "both_confirmed": both_confirmed,
+            "fire_hits": sum(self._fire_hits),
+            "fire_window": len(self._fire_hits),
+            "smoke_hits": sum(self._smoke_hits),
+            "smoke_window": len(self._smoke_hits),
+            "both_hits": sum(self._both_hits),
+            "both_window": len(self._both_hits),
         }
 
     def reset(self) -> None:

@@ -116,12 +116,21 @@ To use detection under systemd, the unit already runs `--run` (heartbeat + detec
 4. Cooldown 30s between cloud alerts
 5. Snapshot with boxes → R2 → `POST /api/device/events/fire`
 
+Debug temporal state on Pi:
+```env
+TEMPORAL_DEBUG=true
+```
+
 Logs on alert:
 ```
-detection confirmed | type=fire_smoke ...
+FIRE_SMOKE CONFIRMED
+sending alert | type=fire_smoke fire=0.77 smoke=0.69
 snapshot saved path=...
-snapshot upload started
-snapshot upload success url=...
-fire event payload: {...}
+snapshot uploaded url=...
 event sent successfully event_id=...
+```
+
+Pending (before confirm):
+```
+confirmation pending | fire 2/3 (hist=110) smoke 3/4 (hist=1110) both 1/2 (hist=10)
 ```

@@ -54,6 +54,7 @@ class DetectorConfig:
     both_window: int = _env_int("TEMPORAL_BOTH_WINDOW", 4)
     # When fire+smoke in same frame above thresholds, confirm immediately
     instant_dual_confirm: bool = _env_bool("INSTANT_DUAL_CONFIRM", True)
+    temporal_debug: bool = _env_bool("TEMPORAL_DEBUG", False)
 
 
 config = DetectorConfig()

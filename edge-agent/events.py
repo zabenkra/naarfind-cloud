@@ -32,7 +32,7 @@ def upload_snapshot(local_path: Path | None) -> str | None:
         from storage.r2_uploader import R2Uploader
 
         url = R2Uploader().upload_image(local_path)
-        logger.info("snapshot upload success url=%s", url)
+        logger.warning("snapshot uploaded url=%s", url)
         return url
     except Exception as exc:
         logger.error("upload failed: %s", exc)
@@ -100,7 +100,7 @@ def publish_detection_event(alert: dict) -> dict:
         if response.get("queued"):
             logger.warning("event queued for retry (API temporarily unavailable)")
             return {"ok": True, "queued": True, "event": event, "response": response}
-        logger.info("event sent successfully event_id=%s", response.get("event_id"))
+        logger.warning("event sent successfully event_id=%s", response.get("event_id"))
         return {"ok": True, "event": event, "response": response}
     except Exception as exc:
         logger.error("API failed: %s", exc)

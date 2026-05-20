@@ -9,7 +9,7 @@ from typing import Callable
 from detector.camera import create_camera
 from detector.config import DetectorConfig, config
 from detector.inference import YOLOFireSmokeInference
-from detector.temporal_filter import TemporalFilter, TemporalRule
+from detector.temporal_filter import TEMPORAL_DEBUG, TemporalFilter, TemporalRule
 from detector.utils import FpsCounter, log_performance, save_snapshot
 
 logger = logging.getLogger(__name__)
@@ -39,19 +39,30 @@ class FireDetectorLoop:
     ) -> None:
         self.cfg = cfg or config
         self.on_alert = on_alert
-        # GUI only when caller explicitly enables it (e.g. --detect-debug + ENABLE_DEBUG_WINDOW)
         self.debug_window = debug_window
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._last_alert_time = 0.0
+        self._alert_lock = threading.Lock()
         self._inference: YOLOFireSmokeInference | None = None
 
     def start(self) -> bool:
-        """Start detection thread. Returns False if model missing (heartbeat can continue)."""
         self._inference = YOLOFireSmokeInference()
         if not self._inference.load_model():
             logger.warning("Detection disabled — model not available")
             return False
+
+        logger.info(
+            "Temporal rules | fire %s/%s smoke %s/%s both %s/%s instant_dual=%s TEMPORAL_DEBUG=%s",
+            self.cfg.fire_required,
+            self.cfg.fire_window,
+            self.cfg.smoke_required,
+            self.cfg.smoke_window,
+            self.cfg.both_required,
+            self.cfg.both_window,
+            self.cfg.instant_dual_confirm,
+            TEMPORAL_DEBUG,
+        )
 
         self._stop.clear()
         self._thread = threading.Thread(
@@ -74,12 +85,18 @@ class FireDetectorLoop:
             return False
         return (time.time() - self._last_alert_time) < self.cfg.detection_cooldown
 
+    def _cooldown_seconds_left(self) -> float:
+        if self._last_alert_time <= 0:
+            return 0.0
+        return max(0.0, self.cfg.detection_cooldown - (time.time() - self._last_alert_time))
+
     def _run_loop(self) -> None:
         camera = None
         temporal = TemporalFilter(
             fire_rule=TemporalRule(self.cfg.fire_required, self.cfg.fire_window),
             smoke_rule=TemporalRule(self.cfg.smoke_required, self.cfg.smoke_window),
             both_rule=TemporalRule(self.cfg.both_required, self.cfg.both_window),
+            instant_dual_confirm=self.cfg.instant_dual_confirm,
         )
         frame_index = 0
         processed_count = 0
@@ -111,87 +128,56 @@ class FireDetectorLoop:
                 if not self._inference or not self._inference.is_loaded:
                     continue
 
+                # Thresholds applied inside inference.predict()
                 result = self._inference.predict(frame)
                 processed_count += 1
                 process_fps = process_fps_counter.tick()
 
-                infer_ms = result.get("inference_ms", 0)
+                fire_detected = bool(result.get("fire_detected"))
+                smoke_detected = bool(result.get("smoke_detected"))
                 detections = result.get("detections", [])
-                in_cooldown = self._in_cooldown()
-                cooldown_left = 0.0
-                if in_cooldown and self._last_alert_time > 0:
-                    cooldown_left = max(
-                        0, self.cfg.detection_cooldown - (time.time() - self._last_alert_time)
-                    )
 
                 log_performance(
                     frame_index=frame_index,
                     processed_count=processed_count,
-                    inference_ms=infer_ms,
+                    inference_ms=result.get("inference_ms", 0),
                     capture_fps=capture_fps,
                     processed_fps=process_fps,
                 )
+
                 if detections:
+                    in_cd = self._in_cooldown()
                     logger.info(
-                        "Detections | %s | cooldown=%s (%.0fs left)",
-                        ", ".join(
-                            f"{d['label']} {d['confidence']:.2f}" for d in detections
-                        ),
-                        "active" if in_cooldown else "ready",
-                        cooldown_left,
+                        "Detections | %s | thresholds fire>=%.2f smoke>=%.2f | "
+                        "cooldown=%s (%.0fs left)",
+                        ", ".join(f"{d['label']} {d['confidence']:.2f}" for d in detections),
+                        self.cfg.fire_threshold,
+                        self.cfg.smoke_threshold,
+                        "active" if in_cd else "ready",
+                        self._cooldown_seconds_left(),
                     )
 
-                confirmed = temporal.update(
-                    result["fire_detected"],
-                    result["smoke_detected"],
-                )
-
-                # Same-frame fire+smoke: confirm immediately (common on Pi)
-                if (
-                    self.cfg.instant_dual_confirm
-                    and result["fire_detected"]
-                    and result["smoke_detected"]
-                    and result.get("fire_confidence", 0) >= self.cfg.fire_threshold
-                    and result.get("smoke_confidence", 0) >= self.cfg.smoke_threshold
-                ):
-                    confirmed["both_confirmed"] = True
-
-                if detections and not any(
-                    (
-                        confirmed["both_confirmed"],
-                        confirmed["fire_confirmed"],
-                        confirmed["smoke_confirmed"],
-                    )
-                ):
-                    logger.debug(
-                        "confirmation pending | fire %s/%s smoke %s/%s both %s/%s",
-                        confirmed["fire_hits"],
-                        self.cfg.fire_required,
-                        confirmed["smoke_hits"],
-                        self.cfg.smoke_required,
-                        confirmed["both_hits"],
-                        self.cfg.both_required,
-                    )
+                # Temporal: append this processed frame, evaluate windows
+                state = temporal.update(fire_detected, smoke_detected)
 
                 if self.debug_window:
                     self._show_debug(frame, result)
 
-                if self._in_cooldown():
-                    continue
-
-                event_type = None
-                if confirmed["both_confirmed"]:
-                    event_type = "fire_smoke"
-                elif confirmed["fire_confirmed"]:
-                    event_type = "fire"
-                elif confirmed["smoke_confirmed"]:
-                    event_type = "smoke"
-
+                event_type = state.event_type
                 if not event_type:
                     continue
 
+                # Cooldown only blocks AFTER temporal confirmation
+                if self._in_cooldown():
+                    logger.info(
+                        "confirmation rejected (cooldown) | would_send=%s (%.0fs left)",
+                        event_type,
+                        self._cooldown_seconds_left(),
+                    )
+                    continue
+
                 logger.warning(
-                    "detection confirmed | type=%s fire=%.2f smoke=%.2f — sending alert",
+                    "sending alert | type=%s fire=%.2f smoke=%.2f",
                     event_type,
                     result.get("fire_confidence", 0),
                     result.get("smoke_confidence", 0),
@@ -214,6 +200,8 @@ class FireDetectorLoop:
             logger.info("Detection loop stopped")
 
     def _show_debug(self, frame, result) -> None:
+        if not (self.debug_window or self.cfg.enable_debug_window):
+            return
         try:
             import cv2
 
@@ -229,6 +217,7 @@ class FireDetectorLoop:
             pass
 
     def _handle_alert(self, frame, result: dict, event_type: str) -> None:
+        """Snapshot → R2 → API. Cooldown starts only after successful publish."""
         fire_conf = result.get("fire_confidence", 0.0)
         smoke_conf = result.get("smoke_confidence", 0.0)
         detections = result.get("detections", [])
@@ -243,7 +232,7 @@ class FireDetectorLoop:
                     self.cfg.snapshot_dir,
                     prefix=event_type,
                 )
-                logger.info("snapshot saved path=%s", local_path)
+                logger.warning("snapshot saved path=%s", local_path)
             except Exception as exc:
                 logger.error("snapshot save failed: %s", exc)
 
@@ -256,20 +245,16 @@ class FireDetectorLoop:
             "detections": detections,
             "local_image_path": str(local_path) if local_path else None,
             "timestamp": timestamp,
-            "frame_rgb": frame,
             "local_path": local_path,
         }
 
-        logger.warning(
-            "ALERT %s fire=%.2f smoke=%.2f risk=%s",
-            event_type,
-            fire_conf,
-            smoke_conf,
-            payload["risk_level"],
-        )
-
-        self._last_alert_time = time.time()
-        try:
-            self.on_alert(payload)
-        except Exception as exc:
-            logger.error("Alert handler failed: %s", exc)
+        with self._alert_lock:
+            try:
+                self.on_alert(payload)
+                self._last_alert_time = time.time()
+                logger.warning(
+                    "alert complete | cooldown=%ss until next",
+                    self.cfg.detection_cooldown,
+                )
+            except Exception as exc:
+                logger.error("Alert handler failed: %s", exc)

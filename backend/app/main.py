@@ -17,13 +17,14 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from app.core.config import PORT
+    from app.core.config import DATABASE_HOST, PORT
 
     validate_production_settings()
     logger.info(
-        "Starting NaarFind API env=%s port=%s cors=%s",
+        "Starting NaarFind API env=%s port=%s database_host=%s cors=%s",
         "production" if IS_PRODUCTION else "development",
         PORT,
+        DATABASE_HOST,
         cors_origins(),
     )
     try:
@@ -34,6 +35,9 @@ async def lifespan(app: FastAPI):
         if IS_PRODUCTION:
             raise
     Base.metadata.create_all(bind=engine)
+    from app.core.migrations import ensure_device_telemetry_columns
+
+    ensure_device_telemetry_columns()
     yield
 
 
@@ -50,6 +54,7 @@ app.add_middleware(
 # TODO: add rate limiting for /api/auth/* and /api/device/* (e.g. slowapi)
 
 app.include_router(auth.router)
+# Device ingest: POST /api/device/heartbeat, POST /api/device/events/fire
 app.include_router(device_events.router)
 app.include_router(dashboard.router)
 app.include_router(devices.router)

@@ -65,6 +65,11 @@ class Device(Base):
     api_key = Column(String, nullable=False)
     is_online = Column(Boolean, default=False)
     last_seen = Column(DateTime(timezone=True))
+    cpu_temp = Column(Float)
+    ram_usage = Column(Float)
+    disk_usage = Column(Float)
+    camera_status = Column(String(64))
+    agent_version = Column(String(64))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     site = relationship("Site", back_populates="devices")

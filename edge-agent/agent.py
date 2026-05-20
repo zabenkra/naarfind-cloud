@@ -166,6 +166,20 @@ def run_production_loop():
         time.sleep(HEARTBEAT_INTERVAL_SECONDS)
 
 
+def run_heartbeat_test() -> int:
+    """Send one heartbeat (same logic as --run) and exit."""
+    print("Sending heartbeat...")
+    try:
+        result = send_heartbeat()
+        print("Heartbeat success")
+        logging.info("Response: %s", result)
+        return 0
+    except RuntimeError as error:
+        print("Heartbeat failed")
+        logging.error("%s", error)
+        return 1
+
+
 def run_test(image_path: str | None = None, video_path: str | None = None):
     logging.info("Running NaarFind edge-agent test mode")
 
@@ -207,15 +221,21 @@ def run_test(image_path: str | None = None, video_path: str | None = None):
 
 def main():
     parser = argparse.ArgumentParser(description="NaarFind Raspberry Pi Edge Agent")
-    parser.add_argument("--test", action="store_true", help="Send a fake fire event")
-    parser.add_argument("--run", action="store_true", help="Production loop: heartbeat + detection")
-    parser.add_argument("--image", type=str, help="Local image file to upload to R2")
-    parser.add_argument("--video", type=str, help="Local video file to upload to R2")
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--test", action="store_true", help="Send one test fire event")
+    mode.add_argument(
+        "--heartbeat-test",
+        action="store_true",
+        help="Send one heartbeat to the backend and exit",
+    )
+    mode.add_argument("--run", action="store_true", help="Production loop: heartbeat + detection")
+    mode.add_argument(
         "--r2-test",
         action="store_true",
         help="Upload sample image to R2 and print public URL",
     )
+    parser.add_argument("--image", type=str, help="Local image file (use with --test)")
+    parser.add_argument("--video", type=str, help="Local video file (use with --test)")
 
     args = parser.parse_args()
 
@@ -223,12 +243,12 @@ def main():
         from test_r2_upload import main as r2_test_main
 
         raise SystemExit(r2_test_main())
+    if args.heartbeat_test:
+        raise SystemExit(run_heartbeat_test())
     if args.test:
         run_test(image_path=args.image, video_path=args.video)
     elif args.run:
         run_production_loop()
-    else:
-        logging.info("No mode selected. Use: python agent.py --run | --test | --r2-test")
 
 
 if __name__ == "__main__":

@@ -75,22 +75,31 @@ sudo systemctl status naarfind-agent
 journalctl -u naarfind-agent -f
 ```
 
+## CLI modes
+
+| Flag | Description |
+|------|-------------|
+| `--heartbeat-test` | Send one heartbeat and exit |
+| `--test` | Send one test fire event |
+| `--run` | Production loop (heartbeat every 30s) |
+| `--r2-test` | Upload sample image to R2 |
+| `--image` / `--video` | Media paths (with `--test` only) |
+
 ## Test locally
 
 **Heartbeat** (backend must be running):
 
 ```bash
-curl -X POST http://localhost:8000/api/device/heartbeat \
-  -H "Content-Type: application/json" \
-  -H "X-Api-Key: SUPER_SECRET_KEY_123" \
-  -d '{
-    "device_uid": "pi-001",
-    "cpu_temp": 52.1,
-    "ram_usage": 41.2,
-    "disk_usage": 28.5,
-    "camera_status": "ok",
-    "agent_version": "1.0.0"
-  }'
+cd edge-agent
+source venv/bin/activate   # or: source .venv/bin/activate
+python agent.py --heartbeat-test
+```
+
+Expected output:
+
+```
+Sending heartbeat...
+Heartbeat success
 ```
 
 **Fire event test:**
@@ -99,10 +108,22 @@ curl -X POST http://localhost:8000/api/device/heartbeat \
 python agent.py --test
 ```
 
+**Fire event with R2 media:**
+
+```bash
+python agent.py --test --image ./samples/test-fire.png --video ./samples/clip.mp4
+```
+
 **R2 upload test:**
 
 ```bash
 python agent.py --r2-test
+```
+
+**Production loop (manual):**
+
+```bash
+python agent.py --run
 ```
 
 ## Plug in fire detection

@@ -27,6 +27,13 @@ AGENT_VERSION=1.0.0
 
 Use simple `KEY=value` lines (no `export`). systemd reads this file via `EnvironmentFile=`.
 
+**Verify API before installing systemd:**
+
+```bash
+source venv/bin/activate
+python agent.py --heartbeat-test
+```
+
 ---
 
 ## 2. Install the service

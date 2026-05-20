@@ -9,9 +9,9 @@ from app.core.deps import (
 )
 from app.models.models import AuditLog, IncidentNote, User
 from app.schemas.fire_event_status import OPEN_INCIDENT_STATUSES
-from app.schemas.fire_events import FireEventOut
 from app.schemas.incidents import (
     IncidentDetailOut,
+    IncidentListItemOut,
     IncidentNoteCreate,
     IncidentNoteOut,
     IncidentStatusUpdate,
@@ -35,7 +35,7 @@ def _audit_org_id(user: User) -> int | None:
     return user.organization_id
 
 
-@router.get("", response_model=list[FireEventOut])
+@router.get("", response_model=list[IncidentListItemOut])
 def list_incidents(
     include_all: bool = Query(False, description="Include resolved and false_alarm"),
     db: Session = Depends(get_db),
@@ -77,6 +77,7 @@ def update_incident_status(
 ):
     org_id = get_effective_organization_id(current_user)
     event, _, _ = get_incident_context(db, incident_id, org_id)
+    fire_event_id = event.id
 
     old_status = event.status
     new_status = payload.status.value
@@ -89,14 +90,14 @@ def update_incident_status(
         user=current_user,
         action="status_changed",
         entity_type="incident",
-        entity_id=incident_id,
+        entity_id=fire_event_id,
         metadata={"old_status": old_status, "new_status": new_status},
     )
     db.commit()
 
     return load_incident_detail(
         db,
-        incident_id,
+        fire_event_id,
         org_id,
         audit_organization_id=_audit_org_id(current_user),
     )

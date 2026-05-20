@@ -49,10 +49,28 @@ class IncidentSiteOut(BaseModel):
     name: str
 
 
+class IncidentListItemOut(BaseModel):
+    """List row — id and fire_event_id are both fire_events.id."""
+
+    id: int = Field(..., description="Primary incident id (fire_events.id)")
+    fire_event_id: int = Field(..., description="Same as id; explicit for clients")
+    device_id: int
+    device_name: Optional[str] = None
+    site_name: Optional[str] = None
+    confidence: float
+    event_type: str
+    image_url: Optional[str] = None
+    video_url: Optional[str] = None
+    temperature: Optional[float] = None
+    status: str
+    created_at: Optional[datetime] = None
+
+
 class IncidentDetailOut(BaseModel):
     """Fire event (incident) detail — incident_id is fire_events.id."""
 
     id: int
+    fire_event_id: int
     device_id: int
     device_name: Optional[str] = None
     site_name: Optional[str] = None

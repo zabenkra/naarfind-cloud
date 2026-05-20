@@ -39,7 +39,7 @@ export default function IncidentDetail() {
       setError(
         getApiErrorMessage(
           err,
-          'Incident not found or you do not have access',
+          'Incident not found for this organization',
         ),
       )
     } finally {

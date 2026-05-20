@@ -1,7 +1,6 @@
 import apiClient from './client'
 
-const INCIDENT_NOT_FOUND =
-  'Incident not found or you do not have access'
+const INCIDENT_NOT_FOUND = 'Incident not found for this organization'
 
 function parseIncidentId(id) {
   const incidentId = Number(id)

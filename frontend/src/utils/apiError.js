@@ -20,6 +20,10 @@ export function getApiErrorMessage(error, fallback = 'Something went wrong') {
     return detail.map((d) => d.msg || JSON.stringify(d)).join(', ')
   }
   if (detail && typeof detail === 'object') {
+    if (typeof detail.detail === 'string') return detail.detail
+    if (detail.requested_id != null && detail.reason) {
+      return `${detail.detail || fallback} (id: ${detail.requested_id})`
+    }
     return detail.message || JSON.stringify(detail)
   }
 

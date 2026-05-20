@@ -5,7 +5,8 @@ from typing import Any, Literal
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.models import AuditLog, Device, FireEvent, IncidentNote, Site
+from app.core.deps import get_effective_organization_id
+from app.models.models import AuditLog, Device, FireEvent, IncidentNote, Site, User
 from app.schemas.incidents import (
     IncidentDetailOut,
     IncidentDeviceOut,
@@ -270,10 +271,11 @@ def to_incident_detail(
 def load_incident_detail(
     db: Session,
     incident_id: int,
-    organization_id: int | None,
+    current_user: User,
     *,
     audit_organization_id: int | None = None,
 ) -> IncidentDetailOut:
+    organization_id = get_effective_organization_id(current_user)
     event, device, site = get_incident_context(db, incident_id, organization_id)
     fire_event_id = event.id
 

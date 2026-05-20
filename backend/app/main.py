@@ -60,8 +60,14 @@ app.include_router(device_events.router)
 app.include_router(dashboard.router)
 app.include_router(devices.router)
 app.include_router(fire_events.router)
-app.include_router(incidents.router)
+app.include_router(incidents.router, prefix="/api/incidents", tags=["incidents"])
 app.include_router(websocket_routes.router)
+
+for route in app.routes:
+    path = getattr(route, "path", "")
+    if path.startswith("/api/incidents"):
+        methods = getattr(route, "methods", None) or []
+        logger.info("Mounted incident route %s %s", ",".join(sorted(methods)) if methods else "WS", path)
 
 
 @app.get("/")

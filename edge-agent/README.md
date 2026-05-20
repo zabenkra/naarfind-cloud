@@ -51,18 +51,20 @@ cp .env.example .env
 nano .env   # CLOUD_API_URL, DEVICE_API_KEY, AGENT_VERSION
 ```
 
-## Production run (heartbeat loop)
+## Production run (heartbeat + AI detection)
 
 ```bash
-source .venv/bin/activate
+source venv/bin/activate
 python agent.py --run
 ```
 
 This will:
 
-- `POST /api/device/heartbeat` every 30s (CPU temp, RAM, disk, camera, agent version)
-- Call `check_fire_detection()` each cycle — implement your ML/camera logic there
-- Queue fire events to `data/pending_fire_events.json` if the API is down, replay when back
+- Run **heartbeat in a background thread** every 30s
+- Run **YOLO fire/smoke detection** in a separate thread (CSI camera + temporal filter)
+- Send alerts to cloud + optional R2 snapshot upload
+
+See **[README_DETECTION.md](./README_DETECTION.md)** for model setup, camera test, and tuning.
 
 ### systemd service (recommended)
 
@@ -79,11 +81,36 @@ journalctl -u naarfind-agent -f
 
 | Flag | Description |
 |------|-------------|
-| `--heartbeat-test` | Send one heartbeat and exit |
+| `--camera-test` | CSI/OpenCV → `snapshots/camera_test.jpg` |
+| `--detect` | Detection + heartbeat (no GUI) |
+| `--detect-debug` | Verbose logs; GUI only if `ENABLE_DEBUG_WINDOW=true` |
+| `--run` | Production: heartbeat + detection |
+| `--heartbeat-test` | Send one heartbeat |
 | `--test` | Send one test fire event |
-| `--run` | Production loop (heartbeat every 30s) |
 | `--r2-test` | Upload sample image to R2 |
 | `--image` / `--video` | Media paths (with `--test` only) |
+
+List all modes: `python agent.py --help`
+
+## Test on Raspberry Pi
+
+```bash
+cd /home/pi/naarfind-cloud/edge-agent
+source venv/bin/activate
+pip install -r requirements-pi.txt
+
+# 1) Camera
+python agent.py --camera-test
+
+# 2) Detection (no GUI)
+python agent.py --detect
+
+# 3) Detection debug (GUI only if ENABLE_DEBUG_WINDOW=true)
+ENABLE_DEBUG_WINDOW=true python agent.py --detect-debug
+
+# 4) Production
+python agent.py --run
+```
 
 ## Test locally
 
@@ -91,7 +118,7 @@ journalctl -u naarfind-agent -f
 
 ```bash
 cd edge-agent
-source venv/bin/activate   # or: source .venv/bin/activate
+source venv/bin/activate
 python agent.py --heartbeat-test
 ```
 
@@ -126,17 +153,17 @@ python agent.py --r2-test
 python agent.py --run
 ```
 
-## Plug in fire detection
+## Fire/smoke AI detection
 
-Edit `check_fire_detection()` in `agent.py`:
+Place YOLO model in `models/` (see `models/README.md`). Configure thresholds in `.env`:
 
-```python
-def check_fire_detection() -> bool:
-    # return True when your model detects fire
-    return my_detector.poll()
+```
+MODEL_PATH=./models/fire_smoke_yolov8n_ncnn_model
+FIRE_THRESHOLD=0.55
+SMOKE_THRESHOLD=0.65
 ```
 
-When `True`, the agent calls `send_fire_event()` automatically.
+Detection uses temporal confirmation and 30s cooldown to limit false alarms.
 
 ## Offline queue
 

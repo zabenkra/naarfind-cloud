@@ -27,12 +27,26 @@ AGENT_VERSION=1.0.0
 
 Use simple `KEY=value` lines (no `export`). systemd reads this file via `EnvironmentFile=`.
 
-**Verify API before installing systemd:**
+**Verify API and hardware before installing systemd:**
 
 ```bash
 source venv/bin/activate
 python agent.py --heartbeat-test
+python agent.py --camera-test
+python agent.py --detect-debug   # optional; needs model in models/
 ```
+
+**CLI reference:**
+
+| Command | Purpose |
+|---------|---------|
+| `python agent.py --camera-test` | Save `snapshots/camera_test.jpg` |
+| `python agent.py --detect` | Detection + heartbeat (headless) |
+| `python agent.py --detect-debug` | Verbose logs; GUI if `ENABLE_DEBUG_WINDOW=true` |
+| `python agent.py --run` | Production (used by systemd) |
+| `python agent.py --heartbeat-test` | One-shot API check |
+
+If `--detect-debug` says `one of the arguments ... is required`, pull latest code — your `agent.py` is outdated.
 
 ---
 
@@ -104,7 +118,7 @@ Stops and disables the service and removes `/etc/systemd/system/naarfind-agent.s
 |---------|--------|
 | Unit file | `systemd/naarfind-agent.service` |
 | After | `network-online.target` |
-| Command | `venv/bin/python agent.py --run` |
+| Command | `venv/bin/python agent.py --run` (heartbeat + detection) |
 | Env | `/home/pi/naarfind-cloud/edge-agent/.env` |
 | Restart | `always` (5s delay) |
 | User | `pi` |

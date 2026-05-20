@@ -1,4 +1,9 @@
 .venv/
+venv/
 __pycache__/
 .env
 data/
+snapshots/
+captures/
+models/*.pt
+models/*_ncnn_model/

@@ -10,6 +10,7 @@ User=pi
 Group=pi
 WorkingDirectory=/home/pi/naarfind-cloud/edge-agent
 EnvironmentFile=/home/pi/naarfind-cloud/edge-agent/.env
+# --run = heartbeat thread + YOLO fire/smoke detection thread
 ExecStart=/home/pi/naarfind-cloud/edge-agent/venv/bin/python /home/pi/naarfind-cloud/edge-agent/agent.py --run
 Restart=always
 RestartSec=5

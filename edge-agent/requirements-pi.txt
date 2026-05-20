@@ -1,0 +1,13 @@
+# Raspberry Pi 4 — full edge-agent with AI detection
+-r requirements.txt
+
+# Camera
+picamera2>=0.3.12; platform_machine == "aarch64"
+
+# Vision / inference
+opencv-python-headless>=4.8.0
+numpy>=1.24.0
+ultralytics>=8.0.0
+
+# NCNN runtime (used when MODEL_PATH points to *_ncnn_model folder)
+# Export on desktop: yolo export model=fire_smoke_yolov8n.pt format=ncnn imgsz=416

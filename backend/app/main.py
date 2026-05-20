@@ -35,9 +35,10 @@ async def lifespan(app: FastAPI):
         if IS_PRODUCTION:
             raise
     Base.metadata.create_all(bind=engine)
-    from app.core.migrations import ensure_device_telemetry_columns
+    from app.core.migrations import ensure_device_telemetry_columns, ensure_incident_tables
 
     ensure_device_telemetry_columns()
+    ensure_incident_tables()
     yield
 
 

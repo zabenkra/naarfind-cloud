@@ -4,6 +4,7 @@ export default function DataTable({
   keyField = 'id',
   emptyMessage = 'No data found.',
   rowClassName,
+  onRowClick,
 }) {
   if (!rows?.length) {
     return (
@@ -33,7 +34,10 @@ export default function DataTable({
             {rows.map((row) => (
               <tr
                 key={row[keyField]}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
                 className={`transition-colors hover:bg-slate-800/30 ${
+                  onRowClick ? 'cursor-pointer' : ''
+                } ${
                   typeof rowClassName === 'function' ? rowClassName(row) : rowClassName || ''
                 }`}
               >

@@ -90,3 +90,36 @@ class FireEvent(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     device = relationship("Device", back_populates="fire_events")
+    notes = relationship(
+        "IncidentNote",
+        back_populates="incident",
+        cascade="all, delete-orphan",
+    )
+
+
+class IncidentNote(Base):
+    __tablename__ = "incident_notes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    incident_id = Column(Integer, ForeignKey("fire_events.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    message = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    incident = relationship("FireEvent", back_populates="notes")
+    user = relationship("User")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    action = Column(String(64), nullable=False)
+    entity_type = Column(String(64), nullable=False)
+    entity_id = Column(Integer, nullable=False, index=True)
+    metadata_json = Column("metadata", String)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User")

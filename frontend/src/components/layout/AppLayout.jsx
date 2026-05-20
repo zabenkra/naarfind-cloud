@@ -14,7 +14,10 @@ const pageTitles = {
 export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const { pathname } = useLocation()
-  const title = pageTitles[pathname] || 'NaarFind'
+  const incidentMatch = pathname.match(/^\/incidents\/(\d+)/)
+  const title = incidentMatch
+    ? `Incident #${incidentMatch[1]}`
+    : pageTitles[pathname] || 'NaarFind'
 
   return (
     <div className="flex min-h-screen bg-[#0b1220]">

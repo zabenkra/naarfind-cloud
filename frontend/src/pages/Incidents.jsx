@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ShieldAlert } from 'lucide-react'
 import { fetchIncidents } from '../api/incidents'
 import { useFireEventSubscription } from '../context/RealtimeProvider'
@@ -7,23 +8,26 @@ import DataTable from '../components/ui/DataTable'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
 import EmptyState from '../components/ui/EmptyState'
 import StatusBadge from '../components/ui/StatusBadge'
-import { formatDate, formatPercent } from '../utils/format'
+import ConfidenceBadge from '../components/incidents/ConfidenceBadge'
+import { formatDate } from '../utils/format'
 import { getApiErrorMessage } from '../utils/apiError'
 
-const OPEN_STATUSES = new Set(['new', 'acknowledged'])
+const OPEN_STATUSES = new Set(['new', 'acknowledged', 'investigating'])
 
 export default function Incidents() {
+  const navigate = useNavigate()
   const [incidents, setIncidents] = useState([])
   const [highlightIds, setHighlightIds] = useState(() => new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [showAll, setShowAll] = useState(false)
 
   useEffect(() => {
     async function load() {
       try {
         setLoading(true)
         setError(null)
-        setIncidents(await fetchIncidents())
+        setIncidents(await fetchIncidents(showAll))
       } catch (err) {
         setError(getApiErrorMessage(err, 'Failed to load incidents'))
       } finally {
@@ -31,7 +35,7 @@ export default function Incidents() {
       }
     }
     load()
-  }, [])
+  }, [showAll])
 
   const highlight = useCallback((id) => {
     setHighlightIds((prev) => new Set(prev).add(id))
@@ -59,16 +63,46 @@ export default function Incidents() {
   )
 
   const columns = [
-    { key: 'id', label: 'ID' },
+    {
+      key: 'thumb',
+      label: '',
+      render: (row) =>
+        row.image_url ? (
+          <img
+            src={row.image_url}
+            alt=""
+            className="h-10 w-14 rounded object-cover ring-1 ring-slate-700"
+            loading="lazy"
+          />
+        ) : (
+          <span className="inline-block h-10 w-14 rounded bg-slate-800" />
+        ),
+    },
+    {
+      key: 'id',
+      label: 'ID',
+      render: (row) => (
+        <span className="font-mono text-orange-400/90">#{row.id}</span>
+      ),
+    },
     {
       key: 'device',
       label: 'Device',
       render: (row) => row.device_name || `Device #${row.device_id}`,
     },
     {
+      key: 'event_type',
+      label: 'Type',
+      render: (row) => (
+        <span className="capitalize text-slate-300">
+          {row.event_type?.replace(/_/g, ' ') || '—'}
+        </span>
+      ),
+    },
+    {
       key: 'confidence',
       label: 'Confidence',
-      render: (row) => formatPercent(row.confidence),
+      render: (row) => <ConfidenceBadge value={row.confidence} />,
     },
     {
       key: 'status',
@@ -84,7 +118,7 @@ export default function Incidents() {
 
   const rows = incidents.map((row) => ({
     ...row,
-    _rowClass: highlightIds.has(row.id) ? 'animate-event-highlight' : '',
+    _rowClass: `cursor-pointer ${highlightIds.has(row.id) ? 'animate-event-highlight' : ''}`,
   }))
 
   if (loading) return <LoadingSpinner label="Loading incidents..." />
@@ -93,7 +127,18 @@ export default function Incidents() {
     <div>
       <PageHeader
         title="Incidents"
-        description="Open fire incidents requiring review — updates live via WebSocket."
+        description="Review and manage fire detection incidents from your devices."
+        action={
+          <label className="flex items-center gap-2 text-sm text-slate-400">
+            <input
+              type="checkbox"
+              checked={showAll}
+              onChange={(e) => setShowAll(e.target.checked)}
+              className="rounded border-slate-600 bg-slate-800 text-orange-600"
+            />
+            Show resolved / false alarms
+          </label>
+        }
       />
 
       {error && (
@@ -105,15 +150,16 @@ export default function Incidents() {
       {!error && incidents.length === 0 ? (
         <EmptyState
           icon={ShieldAlert}
-          title="No open incidents"
-          description="All clear — no incidents need attention right now."
+          title="No incidents"
+          description="All clear — no incidents match your filter."
         />
       ) : (
         <DataTable
           columns={columns}
           rows={rows}
           rowClassName={(row) => row._rowClass}
-          emptyMessage="No open incidents."
+          onRowClick={(row) => navigate(`/incidents/${row.id}`)}
+          emptyMessage="No incidents."
         />
       )}
     </div>

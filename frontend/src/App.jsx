@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard'
 import Devices from './pages/Devices'
 import FireEvents from './pages/FireEvents'
 import Incidents from './pages/Incidents'
+import IncidentDetail from './pages/IncidentDetail'
 import Settings from './pages/Settings'
 
 export default function App() {
@@ -31,6 +32,7 @@ export default function App() {
               <Route path="devices" element={<Devices />} />
               <Route path="fire-events" element={<FireEvents />} />
               <Route path="incidents" element={<Incidents />} />
+              <Route path="incidents/:id" element={<IncidentDetail />} />
               <Route path="settings" element={<Settings />} />
             </Route>
           </Route>

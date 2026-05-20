@@ -5,7 +5,7 @@ import ToastContainer from '../components/ui/ToastContainer'
 
 const RealtimeContext = createContext(null)
 
-const OPEN_STATUSES = new Set(['new', 'acknowledged'])
+const OPEN_STATUSES = new Set(['new', 'acknowledged', 'investigating'])
 const TOAST_TTL_MS = 6000
 
 export function RealtimeProvider({ children }) {

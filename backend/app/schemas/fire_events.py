@@ -32,7 +32,7 @@ class FireEventOut(BaseModel):
 class FireEventStatusUpdate(BaseModel):
     status: FireEventStatus = Field(
         ...,
-        description="Event status: new, acknowledged, false_alarm, or resolved",
+        description="Event status: new, acknowledged, investigating, resolved, false_alarm",
     )
 
 

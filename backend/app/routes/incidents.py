@@ -7,7 +7,7 @@ from app.core.deps import (
     RequireViewer,
     get_effective_organization_id,
 )
-from app.models.models import AuditLog, FireEvent, IncidentNote, User
+from app.models.models import AuditLog, IncidentNote, User
 from app.schemas.fire_event_status import OPEN_INCIDENT_STATUSES
 from app.schemas.fire_events import FireEventOut
 from app.schemas.incidents import (
@@ -18,10 +18,9 @@ from app.schemas.incidents import (
 )
 from app.services.audit import record_audit
 from app.services.incidents import (
-    build_timeline,
-    get_incident_row,
+    get_incident_context,
     list_incidents_for_org,
-    to_incident_detail,
+    load_incident_detail,
 )
 
 router = APIRouter(prefix="/api/incidents", tags=["Incidents"])
@@ -29,11 +28,18 @@ router = APIRouter(prefix="/api/incidents", tags=["Incidents"])
 OPEN_STATUS_VALUES = [s.value for s in OPEN_INCIDENT_STATUSES]
 
 
+def _audit_org_id(user: User) -> int | None:
+    """Scope audit timeline to org; super_admin sees all audit rows for the incident."""
+    if user.role == "super_admin":
+        return None
+    return user.organization_id
+
+
 @router.get("", response_model=list[FireEventOut])
 def list_incidents(
     include_all: bool = Query(False, description="Include resolved and false_alarm"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(RequireViewer),
+    current_user: RequireViewer,
 ):
     org_id = get_effective_organization_id(current_user)
     return list_incidents_for_org(
@@ -48,32 +54,18 @@ def list_incidents(
 def get_incident(
     incident_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RequireViewer),
+    current_user: RequireViewer,
 ):
+    """
+    Incident detail by fire_events.id (same id as list / WebSocket fire_event.id).
+    """
     org_id = get_effective_organization_id(current_user)
-    event, device_name, site_name = get_incident_row(db, incident_id, org_id)
-
-    notes = (
-        db.query(IncidentNote)
-        .options(joinedload(IncidentNote.user))
-        .filter(IncidentNote.incident_id == incident_id)
-        .order_by(IncidentNote.created_at.asc())
-        .all()
+    return load_incident_detail(
+        db,
+        incident_id,
+        org_id,
+        audit_organization_id=_audit_org_id(current_user),
     )
-
-    audit_entries = (
-        db.query(AuditLog)
-        .options(joinedload(AuditLog.user))
-        .filter(
-            AuditLog.entity_type == "incident",
-            AuditLog.entity_id == incident_id,
-        )
-        .order_by(AuditLog.created_at.asc())
-        .all()
-    )
-
-    timeline = build_timeline(event, notes, audit_entries)
-    return to_incident_detail(event, device_name, site_name, notes, timeline)
 
 
 @router.patch("/{incident_id}/status", response_model=IncidentDetailOut)
@@ -84,7 +76,7 @@ def update_incident_status(
     current_user: RequireOperator,
 ):
     org_id = get_effective_organization_id(current_user)
-    event, device_name, site_name = get_incident_row(db, incident_id, org_id)
+    event, _, _ = get_incident_context(db, incident_id, org_id)
 
     old_status = event.status
     new_status = payload.status.value
@@ -102,17 +94,22 @@ def update_incident_status(
     )
     db.commit()
 
-    return get_incident(incident_id, db=db, current_user=current_user)
+    return load_incident_detail(
+        db,
+        incident_id,
+        org_id,
+        audit_organization_id=_audit_org_id(current_user),
+    )
 
 
 @router.get("/{incident_id}/notes", response_model=list[IncidentNoteOut])
 def list_incident_notes(
     incident_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(RequireViewer),
+    current_user: RequireViewer,
 ):
     org_id = get_effective_organization_id(current_user)
-    get_incident_row(db, incident_id, org_id)
+    get_incident_context(db, incident_id, org_id)
 
     notes = (
         db.query(IncidentNote)
@@ -143,7 +140,7 @@ def add_incident_note(
     current_user: RequireOperator,
 ):
     org_id = get_effective_organization_id(current_user)
-    get_incident_row(db, incident_id, org_id)
+    get_incident_context(db, incident_id, org_id)
 
     note = IncidentNote(
         incident_id=incident_id,

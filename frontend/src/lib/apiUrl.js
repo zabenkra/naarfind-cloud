@@ -30,7 +30,8 @@ export function normalizeWsUrl(raw) {
 }
 
 export function getApiUrl() {
-  return import.meta.env.VITE_API_URL || LOCAL_API
+  const raw = import.meta.env.VITE_API_URL || LOCAL_API
+  return String(raw).trim().replace(/\/$/, '')
 }
 
 export function getWsUrl() {

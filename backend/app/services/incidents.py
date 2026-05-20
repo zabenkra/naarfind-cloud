@@ -2,13 +2,21 @@ import json
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
-from app.models.models import AuditLog, Device, FireEvent, IncidentNote, Site, User
+from app.models.models import AuditLog, Device, FireEvent, IncidentNote, Site
 from app.schemas.fire_events import FireEventOut
-from app.schemas.incidents import IncidentDetailOut, IncidentNoteOut, TimelineEntry
+from app.schemas.incidents import (
+    IncidentDetailOut,
+    IncidentDeviceOut,
+    IncidentNoteOut,
+    IncidentSiteOut,
+    TimelineEntry,
+)
 from app.services.fire_events import to_fire_event_out
-from app.services.tenant import fire_events_query, get_fire_event_for_org
+from app.services.tenant import fire_events_query
+
+INCIDENT_NOT_FOUND = "Incident not found or you do not have access"
 
 
 def _parse_metadata(raw: str | None) -> dict[str, Any] | None:
@@ -20,37 +28,39 @@ def _parse_metadata(raw: str | None) -> dict[str, Any] | None:
         return {"raw": raw}
 
 
+def get_incident_context(
+    db: Session,
+    incident_id: int,
+    organization_id: int | None,
+) -> tuple[FireEvent, Device | None, Site | None]:
+    """Load fire event by id (incident_id). Org users are scoped via device site."""
+    event = (
+        db.query(FireEvent)
+        .options(joinedload(FireEvent.device).joinedload(Device.site))
+        .filter(FireEvent.id == incident_id)
+        .first()
+    )
+    if not event:
+        raise HTTPException(status_code=404, detail=INCIDENT_NOT_FOUND)
+
+    device = event.device
+    site = device.site if device else None
+
+    if organization_id is not None:
+        if not site or site.organization_id != organization_id:
+            raise HTTPException(status_code=404, detail=INCIDENT_NOT_FOUND)
+
+    return event, device, site
+
+
 def get_incident_row(
     db: Session,
     incident_id: int,
     organization_id: int | None,
 ) -> tuple[FireEvent, str | None, str | None]:
-    if organization_id is not None:
-        row = (
-            db.query(FireEvent, Device.name, Site.name)
-            .join(Device, FireEvent.device_id == Device.id)
-            .join(Site, Device.site_id == Site.id)
-            .filter(
-                Site.organization_id == organization_id,
-                FireEvent.id == incident_id,
-            )
-            .first()
-        )
-        if not row:
-            raise HTTPException(status_code=404, detail="Incident not found")
-        event, device_name, site_name = row
-        return event, device_name, site_name
-
-    row = (
-        db.query(FireEvent, Device.name, Site.name)
-        .join(Device, FireEvent.device_id == Device.id)
-        .outerjoin(Site, Device.site_id == Site.id)
-        .filter(FireEvent.id == incident_id)
-        .first()
-    )
-    if not row:
-        raise HTTPException(status_code=404, detail="Incident not found")
-    return row[0], row[1], row[2]
+    """Backward-compatible tuple for callers that only need names."""
+    event, device, site = get_incident_context(db, incident_id, organization_id)
+    return event, device.name if device else None, site.name if site else None
 
 
 def build_timeline(
@@ -106,11 +116,13 @@ def build_timeline(
 
 def to_incident_detail(
     event: FireEvent,
-    device_name: str | None,
-    site_name: str | None,
+    device: Device | None,
+    site: Site | None,
     notes: list[IncidentNote],
     timeline: list[TimelineEntry],
 ) -> IncidentDetailOut:
+    device_name = device.name if device else None
+    site_name = site.name if site else None
     note_outs = [
         IncidentNoteOut(
             id=n.id,
@@ -127,6 +139,18 @@ def to_incident_detail(
         device_id=event.device_id,
         device_name=device_name,
         site_name=site_name,
+        device=(
+            IncidentDeviceOut(
+                id=device.id,
+                device_uid=device.device_uid,
+                name=device.name,
+            )
+            if device
+            else None
+        ),
+        site=(
+            IncidentSiteOut(id=site.id, name=site.name) if site else None
+        ),
         confidence=event.confidence,
         event_type=event.event_type,
         image_url=event.image_url,
@@ -137,6 +161,40 @@ def to_incident_detail(
         notes=note_outs,
         timeline=timeline,
     )
+
+
+def load_incident_detail(
+    db: Session,
+    incident_id: int,
+    organization_id: int | None,
+    *,
+    audit_organization_id: int | None = None,
+) -> IncidentDetailOut:
+    """Full incident payload for GET detail and PATCH status responses."""
+    event, device, site = get_incident_context(db, incident_id, organization_id)
+
+    notes = (
+        db.query(IncidentNote)
+        .options(joinedload(IncidentNote.user))
+        .filter(IncidentNote.incident_id == incident_id)
+        .order_by(IncidentNote.created_at.asc())
+        .all()
+    )
+
+    audit_q = (
+        db.query(AuditLog)
+        .options(joinedload(AuditLog.user))
+        .filter(
+            AuditLog.entity_type == "incident",
+            AuditLog.entity_id == incident_id,
+        )
+    )
+    if audit_organization_id is not None:
+        audit_q = audit_q.filter(AuditLog.organization_id == audit_organization_id)
+
+    audit_entries = audit_q.order_by(AuditLog.created_at.asc()).all()
+    timeline = build_timeline(event, notes, audit_entries)
+    return to_incident_detail(event, device, site, notes, timeline)
 
 
 def list_incidents_for_org(

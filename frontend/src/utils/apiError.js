@@ -10,7 +10,12 @@ export function getApiErrorMessage(error, fallback = 'Something went wrong') {
   }
 
   const detail = error.response?.data?.detail
-  if (typeof detail === 'string') return detail
+  if (typeof detail === 'string') {
+    if (error.response?.status === 404 && detail === 'Not Found') {
+      return 'Incident not found or you do not have access'
+    }
+    return detail
+  }
   if (Array.isArray(detail)) {
     return detail.map((d) => d.msg || JSON.stringify(d)).join(', ')
   }

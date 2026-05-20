@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ShieldAlert } from 'lucide-react'
 import { fetchIncidents } from '../api/incidents'
 import { useFireEventSubscription } from '../context/RealtimeProvider'
@@ -82,7 +82,13 @@ export default function Incidents() {
       key: 'id',
       label: 'ID',
       render: (row) => (
-        <span className="font-mono text-orange-400/90">#{row.id}</span>
+        <Link
+          to={`/incidents/${row.id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="font-mono text-orange-400/90 hover:text-orange-300 hover:underline"
+        >
+          #{row.id}
+        </Link>
       ),
     },
     {
@@ -158,7 +164,9 @@ export default function Incidents() {
           columns={columns}
           rows={rows}
           rowClassName={(row) => row._rowClass}
-          onRowClick={(row) => navigate(`/incidents/${row.id}`)}
+          onRowClick={(row) => {
+            if (row?.id) navigate(`/incidents/${row.id}`)
+          }}
           emptyMessage="No incidents."
         />
       )}

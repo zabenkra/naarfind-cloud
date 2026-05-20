@@ -36,7 +36,12 @@ export default function IncidentDetail() {
       setError(null)
       setIncident(await fetchIncident(id))
     } catch (err) {
-      setError(getApiErrorMessage(err, 'Failed to load incident'))
+      setError(
+        getApiErrorMessage(
+          err,
+          'Incident not found or you do not have access',
+        ),
+      )
     } finally {
       setLoading(false)
     }
@@ -75,13 +80,26 @@ export default function IncidentDetail() {
   if (error && !incident) {
     return (
       <div>
-        <Link to="/incidents" className="mb-4 inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white">
+        <Link
+          to="/incidents"
+          className="mb-4 inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white"
+        >
           <ArrowLeft size={16} /> Back to incidents
         </Link>
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-red-400">{error}</div>
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-red-400">
+          {error}
+        </div>
+        <p className="mt-2 text-sm text-slate-500">
+          Incident #{id} — verify the ID in the incidents list and that you are signed in to the
+          correct organization.
+        </p>
       </div>
     )
   }
+
+  const deviceLabel =
+    incident?.device?.name || incident?.device_name || `Device #${incident?.device_id}`
+  const siteLabel = incident?.site?.name || incident?.site_name || '—'
 
   if (!incident) return null
 
@@ -153,15 +171,16 @@ export default function IncidentDetail() {
           <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-4 space-y-4">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Device</p>
-              <p className="text-lg font-semibold text-white">
-                {incident.device_name || `Device #${incident.device_id}`}
-              </p>
+              <p className="text-lg font-semibold text-white">{deviceLabel}</p>
+              {incident.device?.device_uid && (
+                <p className="text-xs font-mono text-slate-500">{incident.device.device_uid}</p>
+              )}
             </div>
             <div className="flex items-start gap-2">
               <MapPin size={16} className="mt-0.5 text-slate-500" />
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500">Site</p>
-                <p className="text-slate-200">{incident.site_name || '—'}</p>
+                <p className="text-slate-200">{siteLabel}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm">

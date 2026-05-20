@@ -38,11 +38,26 @@ class TimelineEntry(BaseModel):
     created_at: datetime
 
 
+class IncidentDeviceOut(BaseModel):
+    id: int
+    device_uid: str
+    name: str
+
+
+class IncidentSiteOut(BaseModel):
+    id: int
+    name: str
+
+
 class IncidentDetailOut(BaseModel):
+    """Fire event (incident) detail — incident_id is fire_events.id."""
+
     id: int
     device_id: int
     device_name: Optional[str] = None
     site_name: Optional[str] = None
+    device: Optional[IncidentDeviceOut] = None
+    site: Optional[IncidentSiteOut] = None
     confidence: float
     event_type: str
     image_url: Optional[str] = None

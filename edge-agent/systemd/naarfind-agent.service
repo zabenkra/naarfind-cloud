@@ -10,6 +10,8 @@ User=pi
 Group=pi
 WorkingDirectory=/home/pi/naarfind-cloud/edge-agent
 EnvironmentFile=/home/pi/naarfind-cloud/edge-agent/.env
+# picamera2 is installed via apt into system dist-packages (not venv)
+Environment=PYTHONPATH=/usr/lib/python3/dist-packages
 # --run = heartbeat thread + YOLO fire/smoke detection thread
 ExecStart=/home/pi/naarfind-cloud/edge-agent/venv/bin/python /home/pi/naarfind-cloud/edge-agent/agent.py --run
 Restart=always

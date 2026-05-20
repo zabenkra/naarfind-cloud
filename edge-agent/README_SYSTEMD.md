@@ -69,21 +69,56 @@ python agent.py --run
 
 ---
 
-## 3. Install service
+## 3. picamera2 (CSI camera)
+
+On Raspberry Pi OS, `picamera2` is installed with apt into system Python, not the venv:
+
+```bash
+sudo apt install -y python3-picamera2 libcamera-dev
+```
+
+Manual test (same as systemd):
+
+```bash
+cd /home/pi/naarfind-cloud/edge-agent
+source venv/bin/activate
+PYTHONPATH=/usr/lib/python3/dist-packages python agent.py --camera-test
+```
+
+The systemd unit sets `PYTHONPATH=/usr/lib/python3/dist-packages` automatically so `--run` can use the CSI camera.
+
+---
+
+## 4. Install service
 
 ```bash
 sudo bash scripts/install_service.sh
 sudo systemctl status naarfind-agent
 ```
 
-Runs: `python agent.py --run` (heartbeat + detection; heartbeat only if no model).
+Runs:
+
+```text
+/home/pi/naarfind-cloud/edge-agent/venv/bin/python .../agent.py --run
+```
+
+with `PYTHONPATH=/usr/lib/python3/dist-packages` for picamera2.
+
+**After editing the service file**, reload and restart:
+
+```bash
+sudo cp /home/pi/naarfind-cloud/edge-agent/systemd/naarfind-agent.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl restart naarfind-agent
+sudo journalctl -u naarfind-agent -f
+```
 
 ---
 
-## 4. Logs
+## 5. Logs
 
 ```bash
-journalctl -u naarfind-agent -f
+sudo journalctl -u naarfind-agent -f
 ```
 
 Look for:
@@ -95,7 +130,7 @@ Look for:
 
 ---
 
-## 5. Commands reference
+## 6. Commands reference
 
 | Command | Use |
 |---------|-----|
@@ -107,7 +142,7 @@ Look for:
 
 ---
 
-## 6. Uninstall
+## 7. Uninstall
 
 ```bash
 sudo bash scripts/uninstall_service.sh
